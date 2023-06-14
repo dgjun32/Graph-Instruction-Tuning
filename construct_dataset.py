@@ -3,12 +3,13 @@ import openai
 import torch_geometric
 import backoff
 import random 
-from torch_geometric.dataset import MoleculeNet
+from torch_geometric.datasets import MoleculeNet
 import multiprocessing
 import timeit 
 
 @backoff.on_exception(backoff.expo, openai.error.RateLimitError)
 def sendRequest(content, bot_model, queue):
+    openai.api_key = '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'
     out = openai.ChatCompletion.create(
                 model=bot_model,
                 messages=[
@@ -36,7 +37,9 @@ def getResponse(content, bot_model):
 
 def create_instruction(seed_instructions, bot_model, k):
     for data, inst_li in seed_instructions.items():
+        print('synthesizing instruction for {} dataset'.format(data))
         for i in range(k):
+            print('synthesized {}th instruction.'.format(i+1))
             inst = inst_li[i]
             prompt = "Generate the instruction which has same meaning with '{}'.".format(inst)
             inst_n = getResponse(prompt, bot_model)
@@ -44,27 +47,21 @@ def create_instruction(seed_instructions, bot_model, k):
     return seed_instructions
     
 if __name__ == '__main__':
-
     # define seed instructions of each dataset
     seed_instructions = {
     'ESOL':['Predict the log solubility in mols per liter.'],
-    'FreeSolv':['Predict the solvation free energies of this molecule in water.']
+    'FreeSolv':['Predict the solvation free energies of this molecule in water.'],
+    'HIV':['Is this molecule a promising drug candidate for HIV treatment? Answer yes (1) or no (0).'],
+    'BACE':['Is this molecule a promising drug candidate for Alzheimer disease by inhibiting the activity of β-secretase? Answer yes (1) or no (0).'],
+    'BBBP':['Is this chemical compound able to cross blood-brain barrier? Answer yes (1) or no (0).'],
     }
-    '''
-    'HIV':[],
-    'BACE':[],
-    'BBBP':[],
-    'Tox21':[],
-    'ClinTox':[],
-    'SIDER':[]
-    '''
     # create instructions
     instructions = create_instruction(seed_instructions, 'gpt-3.5-turbo', 10)
 
     # create graph instruction tuning dataset 
     git_data = {}
     git_data['smiles'], git_data['instruction'], git_data['y'], git_data['task'] = [],[],[],[]
-    for data in seed_instructions.keys():
+    for i, data in enumerate(seed_instructions.keys()):
         dataset = MoleculeNet(root='', name=data)
         dataset_insts = seed_instructions[data]
         for instance in dataset:
@@ -73,9 +70,6 @@ if __name__ == '__main__':
                 git_data['instruction'].append(inst) 
                 git_data['task'].append(data)
                 git_data['y'].append(instance.y)
-    
+
     git_dataset = Dataset.from_dict(git_data)
-
-
-
-
+    git_dataset.to_json('git_dataset.json')
