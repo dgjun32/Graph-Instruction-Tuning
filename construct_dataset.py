@@ -8,8 +8,8 @@ import multiprocessing
 import timeit 
 
 @backoff.on_exception(backoff.expo, openai.error.RateLimitError)
-def sendRequest(content, bot_model, queue):
-    openai.api_key = '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'
+def sendRequest(content, bot_model, queue, api_key):
+    openai.api_key = api_key
     out = openai.ChatCompletion.create(
                 model=bot_model,
                 messages=[
@@ -26,28 +26,35 @@ def limitedWait(s, queue):
     return not queue.empty()
 
 @backoff.on_exception(backoff.expo, openai.error.RateLimitError)
-def getResponse(content, bot_model):
+def getResponse(content, bot_model, api_key):
     max_tries = 1
     for i in range(0, max_tries):
         queue = multiprocessing.Queue()
-        p = multiprocessing.Process(target = sendRequest, args=(content, bot_model, queue,))
+        p = multiprocessing.Process(target = sendRequest, args=(content, bot_model, queue, api_key,))
         p.start()
     return queue.get()
 
 
-def create_instruction(seed_instructions, bot_model, k):
+def create_instruction(seed_instructions, bot_model, k, api_key):
     for data, inst_li in seed_instructions.items():
         print('synthesizing instruction for {} dataset'.format(data))
         for i in range(k):
             print('synthesized {}th instruction.'.format(i+1))
             inst = inst_li[i]
             prompt = "Generate the instruction which has same meaning with '{}'.".format(inst)
-            inst_n = getResponse(prompt, bot_model)
+            inst_n = getResponse(prompt, bot_model, api_key)
             seed_instructions[data].append(inst_n)
     return seed_instructions
     
 if __name__ == '__main__':
     # define seed instructions of each dataset
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bot_model', default='gpt-3.5-turbo')
+    parser.add_argument('--k', default=10)
+    parser.add_argument('--api_key', type=str)
+    args = parser.parse_args()
+
     seed_instructions = {
     'ESOL':['Predict the log solubility in mols per liter.'],
     'FreeSolv':['Predict the solvation free energies of this molecule in water.'],
@@ -56,7 +63,7 @@ if __name__ == '__main__':
     'BBBP':['Is this chemical compound able to cross blood-brain barrier? Answer yes (1) or no (0).'],
     }
     # create instructions
-    instructions = create_instruction(seed_instructions, 'gpt-3.5-turbo', 10)
+    instructions = create_instruction(seed_instructions, args.bot_model, args.k, args.api_key)
 
     # create graph instruction tuning dataset 
     git_data = {}

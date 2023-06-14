@@ -10,7 +10,10 @@ Based on manually written seed instruction set, I synthesized 10 instructions fo
 For .json file of git dataset, please run the script below.
 
 ```
-python construct_dataset.py
+python construct_dataset.py \
+    --bot_model [model version (e.g., gpt-3.5-turbo)] \
+    --k [# of instructions per dataset]
+    --api_key [your openai api key]
 ```
 A single training instances looks like this.
 ```
